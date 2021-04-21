@@ -11,13 +11,6 @@ use x11rb::COPY_DEPTH_FROM_PARENT;
 use std::error::Error;
 use std::time::*;
 
-use vulkano::device::Device;
-use vulkano::device::DeviceExtensions;
-use vulkano::device::Features;
-use vulkano::instance::Instance;
-use vulkano::instance::InstanceExtensions;
-use vulkano::instance::PhysicalDevice;
-
 atom_manager! {
     pub Atoms: AtomsCookie {
         UTF8_STRING,
@@ -150,25 +143,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     let mut image = Image::allocate_native(width, height, 24, &conn.setup())?;
-
-    let instance = Instance::new(None, &InstanceExtensions::none(), None)?;
-    let physical = PhysicalDevice::enumerate(&instance)
-        .next()
-        .ok_or("No Physical Device")?;
-    let queue_family = physical
-        .queue_families()
-        .find(|&q| q.supports_graphics())
-        .ok_or("No proper graphics family")?;
-
-    let (device, mut queues) = {
-        Device::new(
-            physical,
-            &Features::none(),
-            &DeviceExtensions::none(),
-            [(queue_family, 0.5)].iter().cloned(),
-        )?
-    };
-
     loop {
         if let Some(event) = conn.poll_for_event()? {
             println!("Event: {:?}", event);
