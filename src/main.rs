@@ -215,11 +215,11 @@ fn repaint<C: Connection>(
                 data[4 * j * uwidth + 4 * i] =
                     data[4 * j * uwidth + 4 * i].saturating_add(flake.color.0 / 10 * brightness);
                 data[4 * j * uwidth + 4 * i + 1] = data[4 * j * uwidth + 4 * i + 1]
-                    .saturating_add(flake.color.1 / 20 * brightness);
+                    .saturating_add(flake.color.1 / 10 * brightness);
                 data[4 * j * uwidth + 4 * i + 2] = data[4 * j * uwidth + 4 * i + 2]
-                    .saturating_add(flake.color.2 / 20 * brightness);
+                    .saturating_add(flake.color.2 / 10 * brightness);
                 data[4 * j * uwidth + 4 * i + 3] = data[4 * j * uwidth + 4 * i + 3]
-                    .saturating_add(flake.color.3 / 40 * brightness);
+                    .saturating_add(flake.color.3 / 10 * brightness);
             }
         }
     }
@@ -308,11 +308,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let roots = vec![
         Root {
             pos: (0., 0.),
-            color: (255, 255, 0, 0),
+            color: (255, 0, 0, 0),
         },
         Root {
             pos: (0., 0.),
-            color: (0, 255, 255, 0),
+            color: (0, 0, 255, 0),
         },
     ];
 
