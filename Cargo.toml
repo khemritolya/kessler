@@ -7,7 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-x11rb = { version = "*", features = ["image"]}
+x11rb = { version = "0.8.1", features = ["image"]}
+noise = "0.7.0"
+rand = "0.8.3"
 
 [profile.dev]
 opt-level = 3
+lto = "thin"
