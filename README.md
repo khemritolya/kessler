@@ -1,10 +1,11 @@
-<p align="center">
-  <h1 style="text-align: center">Kessler</h1>
-</p>
+<h1 align="center">Kessler</h1>
 
-![Rust CI](https://github.com/khemritolya/kessler/workflows/Rust/badge.svg)
+![Rust CI](https://github.com/khemritolya/kessler/workflows/Rust/badge.svg) ![License](https://img.shields.io/github/license/khemritolya/kessler) ![heehoo](https://img.shields.io/static/v1?label=Requires&message=X11&color=important)
 
-Maybe you remember the old Apple screen saver. This is an attempt at recreating something like it, except as an animated desktop background for the X Window System. Made for personal use -- the color scheme might be busted on your end.
+
+Maybe you remember the old Apple screen saver. This is an attempt at recreating something like it, except as an animated desktop background for the X Window System. Made for personal use -- the color scheme ~~might be~~ is probably broken on your end.
+
+Licensed under the [MIT License](./LICENSE).
 
 <p align="center">
 
@@ -22,6 +23,18 @@ Maybe you remember the old Apple screen saver. This is an attempt at recreating 
 
 - [x11rb](https://github.com/psychon/x11rb)
 - [rand](https://github.com/rust-random/rand)
+
+### Future work:
+
+- Fix the color scheme badness going on right now.
+- Installation? (i.e. optional start-on-login) 
+- Configuration:
+  - General config: FPS target, particile settings
+  - Specify the number of roots/curves, their colors, etc.
+  - Possible integration with `rhai` to allow user-defined curves?.
+- Further optimizations:
+  - More memset in `unsafe` code probably. It seems that writes to the image I'm using as a buffer are what is holding this back, according to [perf](https://perf.wiki.kernel.org/index.php/Main_Page).
+  - Faster curves somehow?
 
 ### Configuration options:
 
