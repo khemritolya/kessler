@@ -116,8 +116,6 @@ fn repaint<C: Connection>(
 
     let lqx = fwidth / 4.;
     let lqy = fheight / 4.;
-    let uqx = 3. * fwidth / 4.;
-    let uqy = 3. * fheight / 4.;
 
     let now = Instant::now();
     let gdt = now.duration_since(*start).as_secs_f64();
