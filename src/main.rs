@@ -155,7 +155,7 @@ fn repaint<C: Connection>(
             beg: pos_0,
             mid: pos_1,
             end: pos_2,
-            start: now.clone(),
+            start: now,
         };
         scene.flakes.push(flake);
     }
@@ -285,7 +285,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut scene = SceneData {
         flakes: Vec::new(),
-        curves: curves,
+        curves,
         root: (width as f64 / 2., height as f64 / 2.),
     };
 
@@ -298,7 +298,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("Event: {:?}", event);
             match event {
                 Event::Expose(_) => {
-                    //repaint(&conn, win, pixmap, gc, screen, &mut color_map)?;
+                    repaint(
+                        &conn, win, gc, screen, &mut image, &mut rng, &start, &mut scene,
+                    )?;
+                }
+                Event::ConfigureNotify(_) => {
+                    // TODO: close?
                 }
                 _ => (),
             }
@@ -315,6 +320,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("delta {:?}", after - prev);
         }
     }
+
+    Ok(())
 }
 
 fn main() {
