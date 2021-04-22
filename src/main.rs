@@ -105,13 +105,9 @@ fn repaint<C: Connection>(
 
     let data = image.data_mut();
 
-    for j in 0..uheight {
-        for i in 0..uwidth {
-            data[4 * j * uwidth + 4 * i] = 0; //b
-            data[4 * j * uwidth + 4 * i + 1] = 0; // g
-            data[4 * j * uwidth + 4 * i + 2] = 0; // r
-            data[4 * j * uwidth + 4 * i + 3] = 0; // a
-        }
+    unsafe {
+        let data_ptr = data.as_mut_ptr();
+        std::ptr::write_bytes(data_ptr, 0, 4 * uwidth * uheight);
     }
 
     let lqx = fwidth / 4.;
@@ -205,7 +201,6 @@ fn repaint<C: Connection>(
 
     conn.flush()?;
 
-    //println!("repainted! {:?}", Instant::now());
     Ok(())
 }
 
@@ -316,8 +311,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let delta = after.duration_since(prev).subsec_millis() as u64;
 
             std::thread::sleep(Duration::from_millis(25_u64.saturating_sub(delta)));
-            let after = Instant::now();
-            println!("delta {:?}", after - prev);
+            let fin = Instant::now();
+            println!("delta {:?},\t work {:?}", fin - prev, after - prev);
         }
     }
 }
