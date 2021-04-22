@@ -313,15 +313,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 &conn, win, gc, screen, &mut image, &mut rng, &start, &mut scene,
             )?;
             let after = Instant::now();
-            std::thread::sleep(
-                Duration::from_millis(25).saturating_sub(after.duration_since(prev)),
-            );
+            let delta = after.duration_since(prev).subsec_millis() as u64;
+
+            std::thread::sleep(Duration::from_millis(25_u64.saturating_sub(delta)));
             let after = Instant::now();
             println!("delta {:?}", after - prev);
         }
     }
-
-    Ok(())
 }
 
 fn main() {

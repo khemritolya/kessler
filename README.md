@@ -1,4 +1,6 @@
-<h1 style="text-align: center">Kessler</h1>
+<p align="center">
+  <h1 style="text-align: center">Kessler</h1>
+</p>
 
 ![Rust CI](https://github.com/khemritolya/kessler/workflows/Rust/badge.svg)
 
