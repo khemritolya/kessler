@@ -82,10 +82,15 @@ struct Curve {
     end: (f64, f64),
 }
 
+struct Root {
+    pos: (f64, f64),
+    color: (u8, u8, u8, u8),
+}
+
 struct SceneData {
     flakes: Vec<Flake>,
     curves: Vec<Box<dyn Fn(f64) -> Curve>>,
-    root: (f64, f64),
+    roots: Vec<Root>,
 }
 
 fn repaint<C: Connection>(
@@ -115,26 +120,38 @@ fn repaint<C: Connection>(
 
     let now = Instant::now();
     let gdt = now.duration_since(*start).as_secs_f64();
-    scene.root = (
-        fwidth / 2. + lqx / 2. * f64::cos(gdt / 5.),
-        fheight / 2. - lqy / 2. * f64::sin(gdt / 5.),
-    );
+    for (i, root) in scene.roots.iter_mut().enumerate() {
+        let i = i as f64;
+        root.pos = (
+            fwidth / 2.
+                + lqx / 4.
+                    * f64::cos(gdt / 15. + i * 2.718)
+                    * (2. + f64::cos(2.718 * (gdt + i) / 15.)),
+            fheight / 2.
+                - lqy / 4.
+                    * f64::sin(gdt / 15. + i * 2.718)
+                    * (2. + f64::cos(2.718 * (gdt + i) / 15.)),
+        );
+    }
 
-    let dt = Duration::from_secs(11);
+    let dt = Duration::from_secs(18);
 
     scene.flakes.retain(|f| now.duration_since(f.start) < dt);
 
     let initial_size = scene.flakes.len();
 
-    let condition = |s| s < 50 || (s < 50 + initial_size && s < 200000);
+    let condition = |s| s < 100 || (s < 100 + initial_size && s < 200000);
 
     while condition(scene.flakes.len()) {
+        let root_idx = rand.gen_range(0..scene.roots.len());
+        let root = &scene.roots[root_idx];
+
         let curve_idx = rand.gen_range(0..scene.curves.len());
-        let curve = (&scene.curves[curve_idx])(gdt);
+        let curve = (&scene.curves[curve_idx])(gdt + 4. * root_idx as f64);
 
         let pos_0 = (
-            scene.root.0 + rand.gen_range(-5.0..5.),
-            scene.root.1 + rand.gen_range(-5.0..5.),
+            root.pos.0 + rand.gen_range(-5.0..5.),
+            root.pos.1 + rand.gen_range(-5.0..5.),
         );
 
         let pos_1 = (
@@ -142,12 +159,20 @@ fn repaint<C: Connection>(
             curve.mid.1 + rand.gen_range(-20.0..20.),
         );
         let pos_2 = (
-            curve.end.0 + rand.gen_range(-60.0..60.),
-            curve.end.1 + rand.gen_range(-60.0..60.),
+            curve.end.0 + rand.gen_range(-40.0..40.),
+            curve.end.1 + rand.gen_range(-40.0..40.),
+        );
+
+        let color: (u8, u8, u8, u8) = rand.gen();
+        let color = (
+            color.0 / 2 + root.color.0 / 2,
+            color.1 / 2 + root.color.1 / 2,
+            color.2 / 2 + root.color.2 / 2,
+            color.3 / 2 + root.color.3 / 2,
         );
 
         let flake = Flake {
-            color: rand.gen(),
+            color: color,
             beg: pos_0,
             mid: pos_1,
             end: pos_2,
@@ -160,8 +185,8 @@ fn repaint<C: Connection>(
         let dt = now.duration_since(flake.start).as_secs_f64();
 
         // oh look, a Bézier curve
-        let minus_dt = 1. - dt / 10.;
-        let dt = dt / 10.;
+        let minus_dt = 1. - dt / 20.;
+        let dt = dt / 20.;
         let x = flake.mid.0
             + minus_dt * minus_dt * (flake.beg.0 - flake.mid.0)
             + dt * dt * (flake.end.0 - flake.mid.0);
@@ -183,23 +208,25 @@ fn repaint<C: Connection>(
             (y + 2.) as usize
         };
 
+        let brightness = (minus_dt * 10.) as u8;
+
         for i in lx..ox {
             for j in ly..oy {
                 data[4 * j * uwidth + 4 * i] =
-                    data[4 * j * uwidth + 4 * i].saturating_add(flake.color.0);
-                data[4 * j * uwidth + 4 * i + 1] =
-                    data[4 * j * uwidth + 4 * i + 1].saturating_add(flake.color.1 / 4);
-                data[4 * j * uwidth + 4 * i + 2] =
-                    data[4 * j * uwidth + 4 * i + 2].saturating_add(flake.color.2 / 2);
-                data[4 * j * uwidth + 4 * i + 3] =
-                    data[4 * j * uwidth + 4 * i + 3].saturating_add(flake.color.3);
+                    data[4 * j * uwidth + 4 * i].saturating_add(flake.color.0 / 10 * brightness);
+                data[4 * j * uwidth + 4 * i + 1] = data[4 * j * uwidth + 4 * i + 1]
+                    .saturating_add(flake.color.1 / 20 * brightness);
+                data[4 * j * uwidth + 4 * i + 2] = data[4 * j * uwidth + 4 * i + 2]
+                    .saturating_add(flake.color.2 / 20 * brightness);
+                data[4 * j * uwidth + 4 * i + 3] = data[4 * j * uwidth + 4 * i + 3]
+                    .saturating_add(flake.color.3 / 40 * brightness);
             }
         }
     }
 
     image.put(conn, win, gc, 0, 0)?;
 
-    conn.flush()?;
+    //conn.flush()?;
 
     Ok(())
 }
@@ -278,10 +305,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         curves
     };
 
+    let roots = vec![
+        Root {
+            pos: (0., 0.),
+            color: (255, 255, 0, 0),
+        },
+        Root {
+            pos: (0., 0.),
+            color: (0, 255, 255, 0),
+        },
+    ];
+
     let mut scene = SceneData {
         flakes: Vec::new(),
         curves,
-        root: (width as f64 / 2., height as f64 / 2.),
+        roots,
     };
 
     let mut rng = thread_rng();
@@ -296,8 +334,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     repaint(
                         &conn, win, gc, screen, &mut image, &mut rng, &start, &mut scene,
                     )?;
+                    conn.flush()?;
                 }
                 Event::ConfigureNotify(_) => {
+                    conn.flush()?;
                     // TODO: close?
                 }
                 _ => (),
