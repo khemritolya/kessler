@@ -1,4 +1,4 @@
-extern crate noise;
+extern crate rand;
 extern crate x11rb;
 
 use x11rb::atom_manager;
@@ -9,11 +9,8 @@ use x11rb::protocol::*;
 use x11rb::wrapper::ConnectionExt as _;
 use x11rb::COPY_DEPTH_FROM_PARENT;
 
-use noise::*;
-
 use rand::prelude::*;
 
-use std::cmp::*;
 use std::error::Error;
 use std::time::*;
 
@@ -72,66 +69,23 @@ fn create_window<C: Connection>(
     Ok(())
 }
 
-#[inline(always)]
-fn set_if(data: &mut [u8], idx: usize, v: u8) {
-    if data[idx] < v {
-        data[idx] = v
-    }
+struct Flake {
+    color: (u8, u8, u8, u8),
+    beg: (f64, f64),
+    mid: (f64, f64),
+    end: (f64, f64),
+    start: Instant,
 }
 
-#[inline(always)]
-fn set(data: &mut [u8], idx: usize, v: u8) {
-    data[idx] = v
-}
-
-#[inline(always)]
-fn put_if(data: &mut [u8], i: usize, j: usize, width: usize, rgba: (u8, u8, u8, u8)) {
-    set_if(data, 8 * i * width + 8 * j, rgba.2); //b
-    set_if(data, 8 * i * width + 8 * j + 1, rgba.1); // g
-    set_if(data, 8 * i * width + 8 * j + 2, rgba.0); // r
-    set_if(data, 8 * i * width + 8 * j + 3, rgba.3); // a
-
-    set_if(data, 8 * i * width + 8 * j + 4, rgba.2); //b
-    set_if(data, 8 * i * width + 8 * j + 5, rgba.1); // g
-    set_if(data, 8 * i * width + 8 * j + 6, rgba.0); // r
-    set_if(data, 8 * i * width + 8 * j + 7, rgba.3); // a
-
-    set_if(data, 8 * i * width + 4 * width + 8 * j, rgba.2); //b
-    set_if(data, 8 * i * width + 4 * width + 8 * j + 1, rgba.1); // g
-    set_if(data, 8 * i * width + 4 * width + 8 * j + 2, rgba.0); // r
-    set_if(data, 8 * i * width + 4 * width + 8 * j + 3, rgba.3); // a
-
-    set_if(data, 8 * i * width + 4 * width + 8 * j + 4, rgba.2); //b
-    set_if(data, 8 * i * width + 4 * width + 8 * j + 5, rgba.1); // g
-    set_if(data, 8 * i * width + 4 * width + 8 * j + 6, rgba.0); // r
-    set_if(data, 8 * i * width + 4 * width + 8 * j + 7, rgba.3); // a
-}
-
-#[inline(always)]
-fn put(data: &mut [u8], i: usize, j: usize, width: usize, rgba: (u8, u8, u8, u8)) {
-    set(data, 8 * i * width + 8 * j, rgba.2); //b
-    set(data, 8 * i * width + 8 * j + 1, rgba.1); // g
-    set(data, 8 * i * width + 8 * j + 2, rgba.0); // r
-    set(data, 8 * i * width + 8 * j + 3, rgba.3); // a
-
-    set(data, 8 * i * width + 8 * j + 4, rgba.2); //b
-    set(data, 8 * i * width + 8 * j + 5, rgba.1); // g
-    set(data, 8 * i * width + 8 * j + 6, rgba.0); // r
-    set(data, 8 * i * width + 8 * j + 7, rgba.3); // a
-
-    set(data, 8 * i * width + 4 * width + 8 * j, rgba.2); //b
-    set(data, 8 * i * width + 4 * width + 8 * j + 1, rgba.1); // g
-    set(data, 8 * i * width + 4 * width + 8 * j + 2, rgba.0); // r
-    set(data, 8 * i * width + 4 * width + 8 * j + 3, rgba.3); // a
-
-    set(data, 8 * i * width + 4 * width + 8 * j + 4, rgba.2); //b
-    set(data, 8 * i * width + 4 * width + 8 * j + 5, rgba.1); // g
-    set(data, 8 * i * width + 4 * width + 8 * j + 6, rgba.0); // r
-    set(data, 8 * i * width + 4 * width + 8 * j + 7, rgba.3); // a
+struct Curve {
+    mid: (f64, f64),
+    end: (f64, f64),
 }
 
 struct SceneData {
-    stars: Vec<(i16, i16, i16)>,
+    flakes: Vec<Flake>,
+    curves: Vec<Box<dyn Fn(f64) -> Curve>>,
+    root: (f64, f64),
 }
 
 fn repaint<C: Connection>(
@@ -140,72 +94,106 @@ fn repaint<C: Connection>(
     gc: u32,
     screen: &Screen,
     image: &mut Image,
-    noise: &dyn NoiseFn<[f64; 3]>,
-    scene: &SceneData,
+    rand: &mut ThreadRng,
+    start: &Instant,
+    scene: &mut SceneData,
 ) -> Result<(), Box<dyn Error>> {
     let uwidth = screen.width_in_pixels as usize;
     let uheight = screen.height_in_pixels as usize;
+    let fwidth = uwidth as f64;
+    let fheight = uheight as f64;
 
     let data = image.data_mut();
-    let delta = (std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis()
-        % 10000000) as f64
-        / 3000.;
 
     for j in 0..uheight {
         for i in 0..uwidth {
             data[4 * j * uwidth + 4 * i] = 0; //b
-            data[4 * j * uwidth + 4 * i + 1] = 20; // g
-            data[4 * j * uwidth + 4 * i + 2] = 40; // r
-            data[4 * j * uwidth + 4 * i + 3] = 255; // a
+            data[4 * j * uwidth + 4 * i + 1] = 0; // g
+            data[4 * j * uwidth + 4 * i + 2] = 0; // r
+            data[4 * j * uwidth + 4 * i + 3] = 0; // a
         }
     }
 
-    for s in scene.stars.iter() {
-        for i in max(0, s.0 - 4 * s.2)..min(uwidth as i16 / 2, s.0 + 4 * s.2) {
-            for j in max(0, s.1 - 4 * s.2)..min(uheight as i16 / 2, s.1 + 4 * s.2) {
-                let d2 = (i - s.0) * (i - s.0) + (j - s.1) * (j - s.1) + 1;
-                let off = f64::sin(delta + s.0 as f64 + s.1 as f64) * 128.;
-                let b = ((256 * s.2 + off as i16) / d2).clamp(0, 255) as u8;
+    let lqx = fwidth / 4.;
+    let lqy = fheight / 4.;
+    let uqx = 3. * fwidth / 4.;
+    let uqy = 3. * fheight / 4.;
 
-                put_if(data, j as usize, i as usize, uwidth, (b, b, b, 255))
-            }
-        }
+    let now = Instant::now();
+    let gdt = now.duration_since(*start).as_secs_f64();
+    scene.root = (
+        fwidth / 2. + lqx / 2. * f64::cos(gdt / 5.),
+        fheight / 2. - lqy / 2. * f64::sin(gdt / 5.),
+    );
+
+    let dt = Duration::from_secs(11);
+
+    scene.flakes.retain(|f| now.duration_since(f.start) < dt);
+
+    let initial_size = scene.flakes.len();
+
+    let condition = |s| s < 20 || (s < 20 + initial_size && s < 200000);
+
+    while condition(scene.flakes.len()) {
+        let curve_idx = rand.gen_range(0..scene.curves.len());
+        let curve = (&scene.curves[curve_idx])(gdt);
+
+        let pos_1 = (
+            curve.mid.0 + rand.gen_range(-20.0..20.),
+            curve.mid.1 + rand.gen_range(-20.0..20.),
+        );
+        let pos_2 = (
+            curve.end.0 + rand.gen_range(-60.0..60.),
+            curve.end.1 + rand.gen_range(-60.0..60.),
+        );
+
+        let flake = Flake {
+            color: rand.gen(),
+            beg: scene.root,
+            mid: pos_1,
+            end: pos_2,
+            start: now.clone(),
+        };
+        scene.flakes.push(flake);
     }
 
-    let min_dim = uwidth.min(uheight) / 2;
-    let center = min_dim as i32 / 2;
+    for flake in scene.flakes.iter() {
+        let dt = now.duration_since(flake.start).as_secs_f64();
 
-    for i in min_dim / 4..3 * min_dim / 4 {
-        for j in min_dim / 4..3 * min_dim / 4 {
-            let fv = noise.get([
-                i as f64 / 20. + delta,
-                j as f64 / 20. + f64::sin(i as f64 / min_dim as f64),
-                delta,
-            ]) * 128.
-                + 128.;
-            let fv = (fv * fv / 8.) as i32;
-            let d2 = (i as i32 - center) * (i as i32 - center)
-                + (j as i32 - center) * (j as i32 - center);
-            let da = d2.saturating_sub(fv).max(1);
-            let r = (2680000 / da).clamp(0, 255);
+        // oh look, a Bézier curve
+        let minus_dt = 1. - dt / 10.;
+        let dt = dt / 10.;
+        let x = flake.mid.0
+            + minus_dt * minus_dt * (flake.beg.0 - flake.mid.0)
+            + dt * dt * (flake.end.0 - flake.mid.0);
+        let y = flake.mid.1
+            + minus_dt * minus_dt * (flake.beg.1 - flake.mid.1)
+            + dt * dt * (flake.end.1 - flake.mid.1);
 
-            if r == 255 {
-                let fv = noise.get([
-                    i as f64 / 20. - delta,
-                    j as f64 / 20. - f64::sin(i as f64 / min_dim as f64),
-                    delta - 100.,
-                ]) * 128.
-                    + 128.;
-                let fv = (fv * fv / 10.) as i32;
-                let da = d2.saturating_sub(fv).max(1);
+        let lx = if x - 2. < 0. { 0 } else { (x - 2.) as usize };
+        let ox = if x + 2. > fwidth {
+            uwidth
+        } else {
+            (x + 2.) as usize
+        };
 
-                let g = 255 - (16800 / da).clamp(0, 255) as u8;
-                put(data, j, i, uwidth, (255, g, 0, 255));
-            } else {
-                put_if(data, j, i, uwidth, (r as u8, (2 * r / 4) as u8, 0, 255));
+        let ly = if y - 2. < 0. { 0 } else { (y - 2.) as usize };
+        let oy = if y + 2. > fheight {
+            uheight
+        } else {
+            (y + 2.) as usize
+        };
+
+        for i in lx..ox {
+            for j in ly..oy {
+                data[4 * j * uwidth + 4 * i] =
+                    data[4 * j * uwidth + 4 * i].saturating_add(flake.color.0);
+                data[4 * j * uwidth + 4 * i + 1] =
+                    data[4 * j * uwidth + 4 * i + 1].saturating_add(flake.color.1 / 4);
+                data[4 * j * uwidth + 4 * i + 2] =
+                    data[4 * j * uwidth + 4 * i + 2].saturating_add(flake.color.2 / 2);
+                data[4 * j * uwidth + 4 * i + 3] =
+                    data[4 * j * uwidth + 4 * i + 3].saturating_add(flake.color.3);
             }
         }
     }
@@ -241,21 +229,54 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut image = Image::allocate_native(width, height, 24, &conn.setup())?;
 
-    let noise = OpenSimplex::new();
+    let fwidth = width as f64;
+    let fheight = height as f64;
 
-    let scene = {
-        let mut rng = rand::thread_rng();
+    let curves = {
+        let mut curves = Vec::new();
 
-        let mut stars = Vec::new();
-        for _ in 0..(width as usize * height as usize / 2048) {
-            let x = rng.gen_range(0..width / 2) as i16;
-            let y = rng.gen_range(0..height / 2) as i16;
-            let r = rng.gen_range(0..2) as i16;
-            stars.push((x, y, r))
-        }
+        let top = Box::new(move |t| Curve {
+            mid: (fwidth / 2. * f64::sin(t / 5.) + fwidth / 2., fheight / 4.),
+            end: (fwidth / 2. * f64::sin(t / 10. + 3.) + fwidth / 2., 0.),
+        }) as Box<dyn Fn(f64) -> Curve>;
+        curves.push(top);
 
-        SceneData { stars }
+        let bottom = Box::new(move |t| Curve {
+            mid: (
+                fwidth / 2. * f64::sin(t / 6.) + fwidth / 2.,
+                3. * fheight / 4.,
+            ),
+            end: (fwidth / 2. * f64::sin(t / 12. - 1.) + fwidth / 2., fheight),
+        }) as Box<dyn Fn(f64) -> Curve>;
+        curves.push(bottom);
+
+        let left = Box::new(move |t| Curve {
+            mid: (fwidth / 4., fheight / 2. * f64::cos(t / 16.) + fheight / 2.),
+            end: (0., fheight / 2. * f64::cos(t / 8. - 2.) + fheight / 2.),
+        }) as Box<dyn Fn(f64) -> Curve>;
+        curves.push(left);
+
+        let right = Box::new(move |t| Curve {
+            mid: (
+                3. * fwidth / 4.,
+                fheight / 2. * f64::cos(t / 5. + 4.) + fheight / 2.,
+            ),
+            end: (fwidth, fheight / 2. * f64::cos(t / 10.) + fheight / 2.),
+        }) as Box<dyn Fn(f64) -> Curve>;
+        curves.push(right);
+
+        curves
     };
+
+    let mut scene = SceneData {
+        flakes: Vec::new(),
+        curves: curves,
+        root: (width as f64 / 2., height as f64 / 2.),
+    };
+
+    let mut rng = thread_rng();
+
+    let start = Instant::now();
 
     loop {
         if let Some(event) = conn.poll_for_event()? {
@@ -268,8 +289,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else {
             let prev = Instant::now();
-            repaint(&conn, win, gc, screen, &mut image, &noise, &scene)?;
-            std::thread::sleep(Duration::from_millis(20));
+            repaint(
+                &conn, win, gc, screen, &mut image, &mut rng, &start, &mut scene,
+            )?;
+            //std::thread::sleep(Duration::from_millis(20));
             let after = Instant::now();
             println!("delta {:?}", after - prev);
         }
