@@ -132,11 +132,16 @@ fn repaint<C: Connection>(
 
     let initial_size = scene.flakes.len();
 
-    let condition = |s| s < 20 || (s < 20 + initial_size && s < 200000);
+    let condition = |s| s < 50 || (s < 50 + initial_size && s < 200000);
 
     while condition(scene.flakes.len()) {
         let curve_idx = rand.gen_range(0..scene.curves.len());
         let curve = (&scene.curves[curve_idx])(gdt);
+
+        let pos_0 = (
+            scene.root.0 + rand.gen_range(-5.0..5.),
+            scene.root.1 + rand.gen_range(-5.0..5.),
+        );
 
         let pos_1 = (
             curve.mid.0 + rand.gen_range(-20.0..20.),
@@ -149,7 +154,7 @@ fn repaint<C: Connection>(
 
         let flake = Flake {
             color: rand.gen(),
-            beg: scene.root,
+            beg: pos_0,
             mid: pos_1,
             end: pos_2,
             start: now.clone(),
@@ -265,6 +270,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }) as Box<dyn Fn(f64) -> Curve>;
         curves.push(right);
 
+        let circ = Box::new(move |t| Curve {
+            mid: (
+                fwidth / 4. * f64::cos(t / 5. + 4.) + fwidth / 2.,
+                fheight / 4. * f64::sin(t / 5. + 4.) + fheight / 2.,
+            ),
+            end: (
+                fwidth / 2. * f64::cos(t / 10.) + fwidth / 2.,
+                fheight / 2. * f64::sin(t / 10.) + fheight / 2.,
+            ),
+        }) as Box<dyn Fn(f64) -> Curve>;
+        curves.push(circ);
+
         curves
     };
 
@@ -292,7 +309,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             repaint(
                 &conn, win, gc, screen, &mut image, &mut rng, &start, &mut scene,
             )?;
-            //std::thread::sleep(Duration::from_millis(20));
+            let after = Instant::now();
+            std::thread::sleep(
+                Duration::from_millis(25).saturating_sub(after.duration_since(prev)),
+            );
             let after = Instant::now();
             println!("delta {:?}", after - prev);
         }
