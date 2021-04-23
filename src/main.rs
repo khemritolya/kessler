@@ -110,6 +110,8 @@ fn repaint<C: Connection>(
 
     let data = image.data_mut();
 
+    // I just want to zero all the bytes in the image.
+    // And to do it fast, please.
     unsafe {
         let data_ptr = data.as_mut_ptr();
         std::ptr::write_bytes(data_ptr, 0, 4 * uwidth * uheight);
@@ -140,7 +142,7 @@ fn repaint<C: Connection>(
 
     let initial_size = scene.flakes.len();
 
-    let condition = |s| s < 100 || (s < 100 + initial_size && s < 200000);
+    let condition = |s| s < 120 + initial_size && s < 100000;
 
     while condition(scene.flakes.len()) {
         let root_idx = rand.gen_range(0..scene.roots.len());
@@ -165,10 +167,10 @@ fn repaint<C: Connection>(
 
         let color: (u8, u8, u8, u8) = rand.gen();
         let color = (
-            color.0 / 2 + root.color.0 / 2,
-            color.1 / 2 + root.color.1 / 2,
-            color.2 / 2 + root.color.2 / 2,
-            color.3 / 2 + root.color.3 / 2,
+            color.0 / root.color.0,
+            color.1 / root.color.1,
+            color.2 / root.color.2,
+            color.3 / root.color.3,
         );
 
         let flake = Flake {
@@ -194,18 +196,18 @@ fn repaint<C: Connection>(
             + minus_dt * minus_dt * (flake.beg.1 - flake.mid.1)
             + dt * dt * (flake.end.1 - flake.mid.1);
 
-        let lx = if x - 2. < 0. { 0 } else { (x - 2.) as usize };
-        let ox = if x + 2. > fwidth {
+        let lx = if x - 1. < 0. { 0 } else { (x - 1.) as usize };
+        let ox = if x + 1. > fwidth {
             uwidth
         } else {
-            (x + 2.) as usize
+            (x + 1.) as usize
         };
 
-        let ly = if y - 2. < 0. { 0 } else { (y - 2.) as usize };
-        let oy = if y + 2. > fheight {
+        let ly = if y - 1. < 0. { 0 } else { (y - 1.) as usize };
+        let oy = if y + 1. > fheight {
             uheight
         } else {
-            (y + 2.) as usize
+            (y + 1.) as usize
         };
 
         let brightness = (minus_dt * 10.) as u8;
@@ -308,11 +310,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let roots = vec![
         Root {
             pos: (0., 0.),
-            color: (255, 0, 0, 0),
+            color: (1, 2, 2, 1),
         },
         Root {
             pos: (0., 0.),
-            color: (0, 0, 255, 0),
+            color: (4, 2, 1, 1),
         },
     ];
 
