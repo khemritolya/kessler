@@ -71,25 +71,25 @@ fn create_window<C: Connection>(
 
 struct Flake {
     color: (u8, u8, u8, u8),
-    beg: (f64, f64),
-    mid: (f64, f64),
-    end: (f64, f64),
+    beg: (f32, f32),
+    mid: (f32, f32),
+    end: (f32, f32),
     start: Instant,
 }
 
 struct Curve {
-    mid: (f64, f64),
-    end: (f64, f64),
+    mid: (f32, f32),
+    end: (f32, f32),
 }
 
 struct Root {
-    pos: (f64, f64),
+    pos: (f32, f32),
     color: (u8, u8, u8, u8),
 }
 
 struct SceneData {
     flakes: Vec<Flake>,
-    curves: Vec<Box<dyn Fn(f64) -> Curve>>,
+    curves: Vec<Box<dyn Fn(f32) -> Curve>>,
     roots: Vec<Root>,
 }
 
@@ -105,8 +105,8 @@ fn repaint<C: Connection>(
 ) -> Result<(), Box<dyn Error>> {
     let uwidth = screen.width_in_pixels as usize;
     let uheight = screen.height_in_pixels as usize;
-    let fwidth = uwidth as f64;
-    let fheight = uheight as f64;
+    let fwidth = uwidth as f32;
+    let fheight = uheight as f32;
 
     let data = image.data_mut();
 
@@ -121,18 +121,18 @@ fn repaint<C: Connection>(
     let lqy = fheight / 4.;
 
     let now = Instant::now();
-    let gdt = now.duration_since(*start).as_secs_f64();
+    let gdt = now.duration_since(*start).as_secs_f32();
     for (i, root) in scene.roots.iter_mut().enumerate() {
-        let i = i as f64;
+        let i = i as f32;
         root.pos = (
             fwidth / 2.
                 + lqx / 4.
-                    * f64::cos(gdt / 15. + i * 2.718)
-                    * (2. + f64::cos(2.718 * (gdt + i) / 15.)),
+                    * f32::cos(gdt / 15. + i * 2.718)
+                    * (2. + f32::cos(2.718 * (gdt + i) / 15.)),
             fheight / 2.
                 - lqy / 4.
-                    * f64::sin(gdt / 15. + i * 2.718)
-                    * (2. + f64::cos(2.718 * (gdt + i) / 15.)),
+                    * f32::sin(gdt / 15. + i * 2.718)
+                    * (2. + f32::cos(2.718 * (gdt + i) / 15.)),
         );
     }
 
@@ -149,7 +149,7 @@ fn repaint<C: Connection>(
         let root = &scene.roots[root_idx];
 
         let curve_idx = rand.gen_range(0..scene.curves.len());
-        let curve = (&scene.curves[curve_idx])(gdt + 4. * root_idx as f64);
+        let curve = (&scene.curves[curve_idx])(gdt + 3.14 * root_idx as f32);
 
         let pos_0 = (
             root.pos.0 + rand.gen_range(-5.0..5.),
@@ -184,11 +184,10 @@ fn repaint<C: Connection>(
     }
 
     for flake in scene.flakes.iter() {
-        let dt = now.duration_since(flake.start).as_secs_f64();
+        let dt = now.duration_since(flake.start).as_secs_f32() / 20.;
 
         // oh look, a Bézier curve
-        let minus_dt = 1. - dt / 20.;
-        let dt = dt / 20.;
+        let minus_dt = 1. - dt;
         let x = flake.mid.0
             + minus_dt * minus_dt * (flake.beg.0 - flake.mid.0)
             + dt * dt * (flake.end.0 - flake.mid.0);
@@ -256,52 +255,91 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut image = Image::allocate_native(width, height, 24, &conn.setup())?;
 
-    let fwidth = width as f64;
-    let fheight = height as f64;
+    let fwidth = width as f32;
+    let fheight = height as f32;
 
     let curves = {
         let mut curves = Vec::new();
 
-        let top = Box::new(move |t| Curve {
-            mid: (fwidth / 2. * f64::sin(t / 5.) + fwidth / 2., fheight / 4.),
-            end: (fwidth / 2. * f64::sin(t / 10. + 3.) + fwidth / 2., 0.),
-        }) as Box<dyn Fn(f64) -> Curve>;
-        curves.push(top);
+        // let top = Box::new(move |t| Curve {
+        //     mid: (
+        //         fwidth / 2. * f32::sin(t / 3.141) + fwidth / 2.,
+        //         fheight / 4.,
+        //     ),
+        //     end: (fwidth / 2. * f32::sin(t / 8.423 + 3.) + fwidth / 2., 0.),
+        // }) as Box<dyn Fn(f32) -> Curve>;
+        // curves.push(top);
 
-        let bottom = Box::new(move |t| Curve {
-            mid: (
-                fwidth / 2. * f64::sin(t / 6.) + fwidth / 2.,
-                3. * fheight / 4.,
-            ),
-            end: (fwidth / 2. * f64::sin(t / 12. - 1.) + fwidth / 2., fheight),
-        }) as Box<dyn Fn(f64) -> Curve>;
-        curves.push(bottom);
+        // let bottom = Box::new(move |t| Curve {
+        //     mid: (
+        //         fwidth / 2. * f32::sin(t / 6.44) + fwidth / 2.,
+        //         3. * fheight / 4.,
+        //     ),
+        //     end: (fwidth / 2. * f32::sin(t / 10.5 - 1.) + fwidth / 2., fheight),
+        // }) as Box<dyn Fn(f32) -> Curve>;
+        // curves.push(bottom);
 
-        let left = Box::new(move |t| Curve {
-            mid: (fwidth / 4., fheight / 2. * f64::cos(t / 16.) + fheight / 2.),
-            end: (0., fheight / 2. * f64::cos(t / 8. - 2.) + fheight / 2.),
-        }) as Box<dyn Fn(f64) -> Curve>;
-        curves.push(left);
+        // let left = Box::new(move |t| Curve {
+        //     mid: (fwidth / 4., fheight / 2. * f32::cos(t / 16.) + fheight / 2.),
+        //     end: (0., fheight / 2. * f32::cos(t / 2.713 - 2.) + fheight / 2.),
+        // }) as Box<dyn Fn(f32) -> Curve>;
+        // curves.push(left);
 
-        let right = Box::new(move |t| Curve {
-            mid: (
-                3. * fwidth / 4.,
-                fheight / 2. * f64::cos(t / 5. + 4.) + fheight / 2.,
-            ),
-            end: (fwidth, fheight / 2. * f64::cos(t / 10.) + fheight / 2.),
-        }) as Box<dyn Fn(f64) -> Curve>;
-        curves.push(right);
+        // let right = Box::new(move |t| Curve {
+        //     mid: (
+        //         3. * fwidth / 4.,
+        //         fheight / 2. * f32::cos(t / 4.112 + 4.) + fheight / 2.,
+        //     ),
+        //     end: (fwidth, fheight / 2. * f32::cos(t / 13.) + fheight / 2.),
+        // }) as Box<dyn Fn(f32) -> Curve>;
+        // curves.push(right);
 
         let circ = Box::new(move |t| Curve {
             mid: (
-                fwidth / 4. * f64::cos(t / 5. + 4.) + fwidth / 2.,
-                fheight / 4. * f64::sin(t / 5. + 4.) + fheight / 2.,
+                fwidth / 3. * f32::cos(t / -5.0_f32 + 1.445_f32) + fwidth / 2.,
+                fheight / 3. * f32::sin(t / -4.0_f32 + 4.221_f32) + fheight / 2.,
             ),
             end: (
-                fwidth / 2. * f64::cos(t / 10.) + fwidth / 2.,
-                fheight / 2. * f64::sin(t / 10.) + fheight / 2.,
+                2. * fwidth / 3. * f32::cos(t / 10.0_f32) + fwidth / 2.,
+                2. * fheight / 3. * f32::sin(t / 10.0_f32) + fheight / 2.,
             ),
-        }) as Box<dyn Fn(f64) -> Curve>;
+        }) as Box<dyn Fn(f32) -> Curve>;
+        curves.push(circ);
+
+        let circ = Box::new(move |t| Curve {
+            mid: (
+                fwidth / 3. * f32::cos(t / 5.0_f32 + 4.0_f32) + fwidth / 2.,
+                fheight / 3. * f32::sin(t / 5.0_f32 + 3.0_f32) + fheight / 2.,
+            ),
+            end: (
+                2. * fwidth / 3. * f32::cos(t / 10.0_f32) + fwidth / 2.,
+                2. * fheight / 3. * f32::sin(t / 10.0_f32) + fheight / 2.,
+            ),
+        }) as Box<dyn Fn(f32) -> Curve>;
+        curves.push(circ);
+
+        let circ = Box::new(move |t| Curve {
+            mid: (
+                fwidth / 3. * f32::cos(t / -5.0_f32) + fwidth / 2.,
+                fheight / 3. * f32::sin(t / -5.0_f32) + fheight / 2.,
+            ),
+            end: (
+                2. * fwidth / 3. * f32::cos(t / -10.0_f32) + fwidth / 2.,
+                2. * fheight / 3. * f32::sin(t / -10.0_f32) + fheight / 2.,
+            ),
+        }) as Box<dyn Fn(f32) -> Curve>;
+        curves.push(circ);
+
+        let circ = Box::new(move |t| Curve {
+            mid: (
+                fwidth / 4. * f32::cos(t / 5.0_f32 + 5.731_f32) + fwidth / 2.,
+                fheight / 4. * f32::sin(t / 5.0_f32 + 3.0_f32) + fheight / 2.,
+            ),
+            end: (
+                fwidth / 2. * f32::cos(t / -10.0_f32 + 2.131_f32) + fwidth / 2.,
+                fheight / 2. * f32::sin(t / -10.0_f32) + fheight / 2.,
+            ),
+        }) as Box<dyn Fn(f32) -> Curve>;
         curves.push(circ);
 
         curves
@@ -352,7 +390,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let after = Instant::now();
             let delta = after.duration_since(prev).subsec_millis() as u64;
 
-            std::thread::sleep(Duration::from_millis(25_u64.saturating_sub(delta)));
+            std::thread::sleep(Duration::from_millis(33_u64.saturating_sub(delta)));
             let fin = Instant::now();
             println!("delta {:?},\t work {:?}", fin - prev, after - prev);
         }
